@@ -15,6 +15,7 @@ using SanteDB.Core.Security.Services;
 using SanteDB.Core.Security;
 using System.Messaging;
 using SanteDB.Queue.Msmq.Configuration;
+using SanteDB.Core.Diagnostics;
 
 namespace SanteDB.Queue.Msmq
 {
@@ -23,6 +24,9 @@ namespace SanteDB.Queue.Msmq
     /// </summary>
     public class MsmqPersistentQueueService : IDispatcherQueueManagerService, IDisposable
     {
+        // MSMQ Persistence queue service
+        private Tracer m_tracer = Tracer.GetTracer(typeof(MsmqPersistentQueueService));
+
         // Queues that are open
         private ConcurrentDictionary<String, MessageQueue> m_queues = new ConcurrentDictionary<string, MessageQueue>();
 
@@ -71,13 +75,20 @@ namespace SanteDB.Queue.Msmq
                 try
                 {
                     Message mqMessage = null;
-                    if (String.IsNullOrEmpty(correlationId))
+                    try
                     {
-                        mqMessage = mq.Receive();
+                        if (String.IsNullOrEmpty(correlationId))
+                        {
+                            mqMessage = mq.Receive(new TimeSpan(0, 0, 0, 5));
+                        }
+                        else
+                        {
+                            mqMessage = mq.ReceiveById(correlationId.Replace("~", "\\"), new TimeSpan(0, 0, 0, 5));
+                        }
                     }
-                    else
+                    catch(TimeoutException)
                     {
-                        mqMessage = mq.ReceiveById(correlationId.Replace("~", "\\"), new TimeSpan(0, 0, 0, 5));
+                        return null;
                     }
 
                     mqMessage.Formatter = this.m_formatter;
@@ -207,14 +218,14 @@ namespace SanteDB.Queue.Msmq
 
             try
             {
-                var sourceMessage = sourceQueue.ReceiveById(entry.CorrelationId);
+                var sourceMessage = sourceQueue.ReceiveById(entry.CorrelationId.Replace("~", "\\"));
                 sourceMessage.Formatter = this.m_formatter;
                 var newMessage = new Message(sourceMessage.Body);
                 newMessage.Formatter = this.m_formatter;
-
                 newMessage.Label = sourceMessage.Label;
+
                 targetQueue.Send(newMessage);
-                return new DispatcherQueueEntry(newMessage.Id.Replace("\\", "~"), toQueue, newMessage.ArrivedTime, newMessage.Label, sourceMessage.Body);
+                return new DispatcherQueueEntry(newMessage.Id.Replace("\\", "~"), toQueue, sourceMessage.ArrivedTime, newMessage.Label, sourceMessage.Body);
             }
             catch (Exception e)
             {
@@ -294,8 +305,18 @@ namespace SanteDB.Queue.Msmq
                 var mq = this.OpenQueueInternal(queueName);
                 eventHandler = (o, e) =>
                 {
-                    callback(new DispatcherMessageEnqueuedInfo(queueName, e.Message.Id.Replace("\\", "~")));
-                    mq.BeginPeek();
+                    try
+                    {
+                        callback(new DispatcherMessageEnqueuedInfo(queueName, e.Message.Id.Replace("\\", "~")));
+                    }
+                    catch (Exception ex)
+                    {
+                        this.m_tracer.TraceError("Error performing callback - {0}", ex);
+                    }
+                    finally
+                    {
+                        mq.BeginPeek();
+                    }
                 };
                 mq.PeekCompleted += eventHandler;
                 mq.BeginPeek();
