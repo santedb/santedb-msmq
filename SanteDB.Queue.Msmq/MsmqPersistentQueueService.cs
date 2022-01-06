@@ -100,6 +100,11 @@ namespace SanteDB.Queue.Msmq
                         return new DispatcherQueueEntry(mqMessage.Id.Replace("\\", "~"), queueName, mqMessage.ArrivedTime, mqMessage.Label, xsz.Deserialize(str));
                     }
                 }
+                catch(TimeoutException)
+                {
+                    this.m_tracer.TraceWarning("Timeout error reading MSMQ data - perhaps the queue is empty?");
+                    return null;
+                }
                 catch (Exception e)
                 {
                     throw new DataPersistenceException($"Error de-queueing message from {queueName}", e);
