@@ -1,6 +1,7 @@
 ﻿using SanteDB.Core.Configuration;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,6 +19,8 @@ namespace SanteDB.Queue.Msmq.Configuration
         /// The root to the queue
         /// </summary>
         [XmlElement("queuePath")]
+        [DisplayName("MSMQ Path")]
+        [Description("The path where the Microsoft Message Queue resides (example: .\\$Private or \\ServerName\\Queue")]
         public string QueuePath { get; set; }
     }
 }

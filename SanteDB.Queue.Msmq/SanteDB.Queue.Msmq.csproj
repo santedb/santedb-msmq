@@ -72,8 +72,9 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
+    <Compile Include="Configuration\MsmqQueueFeature.cs" />
     <Compile Include="MsmqPersistentQueueService.cs" />
-    <Compile Include="MsmqQueueConfigurationSection.cs" />
+    <Compile Include="Configuration\MsmqQueueConfigurationSection.cs" />
     <Compile Include="Properties\Version.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
