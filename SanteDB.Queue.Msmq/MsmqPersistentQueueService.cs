@@ -86,6 +86,10 @@ namespace SanteDB.Queue.Msmq
                             mqMessage = mq.ReceiveById(correlationId.Replace("~", "\\"), new TimeSpan(0, 0, 0, 5));
                         }
                     }
+                    catch(MessageQueueException e) when (e.MessageQueueErrorCode == MessageQueueErrorCode.IOTimeout)
+                    {
+                        return null;
+                    }
                     catch(TimeoutException)
                     {
                         return null;

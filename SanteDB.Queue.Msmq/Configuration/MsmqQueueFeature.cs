@@ -36,7 +36,7 @@ namespace SanteDB.Queue.Msmq.Configuration
         {
             return new MsmqQueueConfigurationSection()
             {
-                QueuePath = ".\\$Private"
+                QueuePath = ".\\Private$"
             };
         }
     }
