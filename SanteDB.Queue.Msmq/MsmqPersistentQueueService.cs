@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -22,6 +23,7 @@ namespace SanteDB.Queue.Msmq
     /// <summary>
     /// A persistent queue service which uses MSMQ
     /// </summary>
+    [ExcludeFromCodeCoverage]
     public class MsmqPersistentQueueService : IDispatcherQueueManagerService, IDisposable
     {
         // MSMQ Persistence queue service

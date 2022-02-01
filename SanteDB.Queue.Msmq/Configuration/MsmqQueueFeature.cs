@@ -2,6 +2,7 @@
 using SanteDB.Core.Configuration.Features;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ namespace SanteDB.Queue.Msmq.Configuration
     /// <summary>
     /// Microsoft Message Queue configuration tool feature
     /// </summary>
+    [ExcludeFromCodeCoverage]
     public class MsmqQueueFeature : GenericServiceFeature<MsmqPersistentQueueService>
     {
 
