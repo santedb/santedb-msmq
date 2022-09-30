@@ -18,25 +18,21 @@
  * User: fyfej
  * Date: 2022-5-30
  */
+using SanteDB.Core.Diagnostics;
+using SanteDB.Core.Exceptions;
+using SanteDB.Core.Model.Serialization;
+using SanteDB.Core.Queue;
+using SanteDB.Core.Security;
+using SanteDB.Core.Security.Services;
 using SanteDB.Core.Services;
+using SanteDB.Queue.Msmq.Configuration;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Serialization;
-using SanteDB.Core.Model;
-using SanteDB.Core.Model.Serialization;
-using SanteDB.Core.Queue;
-using SanteDB.Core.Exceptions;
-using SanteDB.Core.Security.Services;
-using SanteDB.Core.Security;
 using System.Messaging;
-using SanteDB.Queue.Msmq.Configuration;
-using SanteDB.Core.Diagnostics;
 
 namespace SanteDB.Queue.Msmq
 {
@@ -108,11 +104,11 @@ namespace SanteDB.Queue.Msmq
                             mqMessage = mq.ReceiveById(correlationId.Replace("~", "\\"), new TimeSpan(0, 0, 0, 5));
                         }
                     }
-                    catch(MessageQueueException e) when (e.MessageQueueErrorCode == MessageQueueErrorCode.IOTimeout)
+                    catch (MessageQueueException e) when (e.MessageQueueErrorCode == MessageQueueErrorCode.IOTimeout)
                     {
                         return null;
                     }
-                    catch(TimeoutException)
+                    catch (TimeoutException)
                     {
                         return null;
                     }
@@ -126,7 +122,7 @@ namespace SanteDB.Queue.Msmq
                         return new DispatcherQueueEntry(mqMessage.Id.Replace("\\", "~"), queueName, mqMessage.ArrivedTime, mqMessage.Label, xsz.Deserialize(str));
                     }
                 }
-                catch(TimeoutException)
+                catch (TimeoutException)
                 {
                     this.m_tracer.TraceWarning("Timeout error reading MSMQ data - perhaps the queue is empty?");
                     return null;
@@ -211,7 +207,9 @@ namespace SanteDB.Queue.Msmq
             {
                 var mqMessage = mq.PeekById(correlationId.Replace("~", "\\"), new TimeSpan(0, 0, 5));
                 if (mqMessage == null)
+                {
                     throw new KeyNotFoundException($"No message with correlationId {correlationId} found");
+                }
 
                 mqMessage.Formatter = this.m_formatter;
 
