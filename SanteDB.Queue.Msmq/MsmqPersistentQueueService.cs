@@ -264,18 +264,12 @@ namespace SanteDB.Queue.Msmq
             }
         }
 
-        /// <summary>
-        /// Open the configuration
-        /// </summary>
-        /// <param name="queueName"></param>
+        /// <inheritdoc />
         public void Open(string queueName)
         {
             try
             {
-                if (!this.m_queues.TryGetValue(queueName, out MessageQueue mq))
-                {
-                    mq = this.OpenQueueInternal(queueName);
-                }
+                _ = this.OpenQueueInternal(queueName);
             }
             catch (Exception e)
             {
