@@ -45,9 +45,6 @@ namespace SanteDB.Queue.Msmq
         // MSMQ Persistence queue service
         private Tracer m_tracer = Tracer.GetTracer(typeof(MsmqPersistentQueueService));
 
-        // Queues that are open
-        private ConcurrentDictionary<String, MessageQueue> m_queues = new ConcurrentDictionary<string, MessageQueue>();
-
         // Callbacks
         private ConcurrentDictionary<DispatcherQueueCallback, PeekCompletedEventHandler> m_callbacks = new ConcurrentDictionary<DispatcherQueueCallback, PeekCompletedEventHandler>();
 
@@ -88,11 +85,11 @@ namespace SanteDB.Queue.Msmq
         public DispatcherQueueEntry DequeueById(String queueName, String correlationId)
         {
             // Read from the queue if it is open
-            if (this.m_queues.TryGetValue(queueName, out MessageQueue mq))
+            using (var mq = this.OpenQueueInternal(queueName))
             {
+                Message mqMessage = null;
                 try
                 {
-                    Message mqMessage = null;
                     try
                     {
                         if (String.IsNullOrEmpty(correlationId))
@@ -131,10 +128,10 @@ namespace SanteDB.Queue.Msmq
                 {
                     throw new DataPersistenceException($"Error de-queueing message from {queueName}", e);
                 }
-            }
-            else
-            {
-                return null;
+                finally
+                {
+                    mqMessage?.Dispose();
+                }
             }
         }
 
@@ -143,10 +140,7 @@ namespace SanteDB.Queue.Msmq
         /// </summary>
         public void Dispose()
         {
-            foreach (var q in this.m_queues.Values)
-            {
-                q.Dispose();
-            }
+
         }
 
         /// <summary>
@@ -154,25 +148,25 @@ namespace SanteDB.Queue.Msmq
         /// </summary>
         public void Enqueue(string queueName, object data)
         {
-            if (!this.m_queues.TryGetValue(queueName, out MessageQueue mq))
+            using (var mq = this.OpenQueueInternal(queueName))
             {
-                mq = this.OpenQueueInternal(queueName);
-            }
-
-            try
-            {
-                using (var ms = new MemoryStream())
+                try
                 {
-                    XmlModelSerializerFactory.Current.CreateSerializer(data.GetType()).Serialize(ms, data);
-                    var message = new Message(ms.GetBuffer());
-                    message.Formatter = this.m_formatter;
-                    message.Label = data.GetType().AssemblyQualifiedName;
-                    mq.Send(message);
+                    using (var ms = new MemoryStream())
+                    {
+                        XmlModelSerializerFactory.Current.CreateSerializer(data.GetType()).Serialize(ms, data);
+                        using (var message = new Message(ms.GetBuffer()))
+                        {
+                            message.Formatter = this.m_formatter;
+                            message.Label = data.GetType().AssemblyQualifiedName;
+                            mq.Send(message);
+                        }
+                    }
                 }
-            }
-            catch (Exception e)
-            {
-                throw new DataPersistenceException($"Error enqueueing message to {queueName}", e);
+                catch (Exception e)
+                {
+                    throw new DataPersistenceException($"Error enqueueing message to {queueName}", e);
+                }
             }
         }
 
@@ -181,19 +175,17 @@ namespace SanteDB.Queue.Msmq
         /// </summary>
         public IEnumerable<DispatcherQueueEntry> GetQueueEntries(string queueName)
         {
-            if (!this.m_queues.TryGetValue(queueName, out MessageQueue mq))
+            using (var mq = this.OpenQueueInternal(queueName))
             {
-                throw new KeyNotFoundException($"No queue named {queueName} found");
-            }
-
-            using (var enu = mq.GetMessageEnumerator2())
-            {
-                while (enu.MoveNext())
+                using (var enu = mq.GetMessageEnumerator2())
                 {
-                    var msg = enu.Current;
-                    msg.Formatter = this.m_formatter;
-                    //enu.Current.Formatter = this.m_formatter;
-                    yield return new DispatcherQueueEntry(enu.Current.Id.Replace("\\", "~"), queueName, msg.ArrivedTime, msg.Label, msg.Body);
+                    while (enu.MoveNext())
+                    {
+                        var msg = enu.Current;
+                        msg.Formatter = this.m_formatter;
+                        //enu.Current.Formatter = this.m_formatter;
+                        yield return new DispatcherQueueEntry(enu.Current.Id.Replace("\\", "~"), queueName, msg.ArrivedTime, msg.Label, msg.Body);
+                    }
                 }
             }
         }
@@ -203,7 +195,7 @@ namespace SanteDB.Queue.Msmq
         /// </summary>
         public DispatcherQueueEntry GetQueueEntry(string queueName, string correlationId)
         {
-            if (this.m_queues.TryGetValue(queueName, out var mq))
+            using (var mq = this.OpenQueueInternal(queueName))
             {
                 var mqMessage = mq.PeekById(correlationId.Replace("~", "\\"), new TimeSpan(0, 0, 5));
                 if (mqMessage == null)
@@ -221,12 +213,18 @@ namespace SanteDB.Queue.Msmq
         /// <summary>
         /// Get all queues
         /// </summary>
-        public IEnumerable<DispatcherQueueInfo> GetQueues() => this.m_queues.Select(o => new DispatcherQueueInfo()
+        public IEnumerable<DispatcherQueueInfo> GetQueues() => MessageQueue.GetPrivateQueuesByMachine(".").Select(o =>
         {
-            Id = o.Key,
-            Name = o.Value.QueueName,
-            QueueSize = o.Value.GetAllMessages().Count(),
-            CreationTime = o.Value.CreateTime
+            using (o)
+            {
+                return new DispatcherQueueInfo()
+                {
+                    Id = o.QueueName,
+                    Name = o.Label,
+                    QueueSize = o.GetAllMessages().Count(),
+                    CreationTime = o.CreateTime
+                };
+            }
         });
 
         /// <summary>
@@ -234,31 +232,24 @@ namespace SanteDB.Queue.Msmq
         /// </summary>
         public DispatcherQueueEntry Move(DispatcherQueueEntry entry, string toQueue)
         {
-            // Attempt a move
-            if (!this.m_queues.TryGetValue(entry.SourceQueue, out MessageQueue sourceQueue))
+            using (var sourceQueue = this.OpenQueueInternal(entry.SourceQueue))
+            using (var targetQueue = this.OpenQueueInternal(toQueue))
             {
-                sourceQueue = this.OpenQueueInternal(entry.SourceQueue);
-            }
+                try
+                {
+                    var sourceMessage = sourceQueue.ReceiveById(entry.CorrelationId.Replace("~", "\\"));
+                    sourceMessage.Formatter = this.m_formatter;
+                    var newMessage = new Message(sourceMessage.Body);
+                    newMessage.Formatter = this.m_formatter;
+                    newMessage.Label = sourceMessage.Label;
 
-            if (!this.m_queues.TryGetValue(toQueue, out MessageQueue targetQueue))
-            {
-                targetQueue = this.OpenQueueInternal(toQueue);
-            }
-
-            try
-            {
-                var sourceMessage = sourceQueue.ReceiveById(entry.CorrelationId.Replace("~", "\\"));
-                sourceMessage.Formatter = this.m_formatter;
-                var newMessage = new Message(sourceMessage.Body);
-                newMessage.Formatter = this.m_formatter;
-                newMessage.Label = sourceMessage.Label;
-
-                targetQueue.Send(newMessage);
-                return new DispatcherQueueEntry(newMessage.Id.Replace("\\", "~"), toQueue, sourceMessage.ArrivedTime, newMessage.Label, sourceMessage.Body);
-            }
-            catch (Exception e)
-            {
-                throw new DataPersistenceException($"Error moving message from {entry.SourceQueue} to {toQueue}", e);
+                    targetQueue.Send(newMessage);
+                    return new DispatcherQueueEntry(newMessage.Id.Replace("\\", "~"), toQueue, sourceMessage.ArrivedTime, newMessage.Label, sourceMessage.Body);
+                }
+                catch (Exception e)
+                {
+                    throw new DataPersistenceException($"Error moving message from {entry.SourceQueue} to {toQueue}", e);
+                }
             }
         }
 
@@ -280,27 +271,26 @@ namespace SanteDB.Queue.Msmq
         /// </summary>
         private MessageQueue OpenQueueInternal(string queueName)
         {
-            if (!this.m_queues.TryGetValue(queueName, out var mq))
+
+            MessageQueue mq = null;
+            var queueConnection = this.m_configuration?.QueuePath ?? ".\\Private$";
+            var queuePath = $"{queueConnection}\\sdb.{queueName}";
+            // Do we need to create the queue?
+            if (MessageQueue.Exists(queuePath))
             {
-                var queueConnection = this.m_configuration?.QueuePath ?? ".\\Private$";
-                var queuePath = $"{queueConnection}\\sdb.{queueName}";
-                // Do we need to create the queue?
-                if (MessageQueue.Exists(queuePath))
-                {
-                    mq = new MessageQueue(queuePath);
-                }
-                else
-                {
-                    mq = MessageQueue.Create(queuePath);
-                    mq.Label = $"SanteDB Queue {queueName}";
-                }
-
-                mq.MessageReadPropertyFilter.ArrivedTime = true;
-                mq.MessageReadPropertyFilter.Id = true;
-
-                this.m_queues.TryAdd(queueName, mq);
+                mq = new MessageQueue(queuePath);
             }
+            else
+            {
+                mq = MessageQueue.Create(queuePath);
+                mq.Label = $"SanteDB Queue {queueName}";
+            }
+
+            mq.MessageReadPropertyFilter.ArrivedTime = true;
+            mq.MessageReadPropertyFilter.Id = true;
+
             return mq;
+
         }
 
         /// <summary>
@@ -310,7 +300,7 @@ namespace SanteDB.Queue.Msmq
         {
             this.m_pepService.Demand(PermissionPolicyIdentifiers.ManageDispatcherQueues);
 
-            if (this.m_queues.TryGetValue(queueName, out var mq))
+            using (var mq = this.OpenQueueInternal(queueName))
             {
                 mq.Purge();
             }
