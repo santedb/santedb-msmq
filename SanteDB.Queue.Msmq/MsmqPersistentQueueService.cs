@@ -219,7 +219,7 @@ namespace SanteDB.Queue.Msmq
             {
                 return new DispatcherQueueInfo()
                 {
-                    Id = o.QueueName,
+                    Id = $".\\{o.QueueName}",
                     Name = o.Label,
                     QueueSize = o.GetAllMessages().Count(),
                     CreationTime = o.CreateTime
