@@ -27,7 +27,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("SanteDB.Queue.Msmq")]
-[assembly: AssemblyCopyright("Copyright ©  2021 SanteSuite Contributors")]
+[assembly: AssemblyCopyright("Copyright (c) 2020-2024 SanteSuite Contributors")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
