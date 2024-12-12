@@ -15,8 +15,6 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  *
- * User: fyfej
- * Date: 2023-6-21
  */
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -29,7 +27,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("SanteDB.Queue.Msmq")]
-[assembly: AssemblyCopyright("Copyright ©  2021 SanteSuite Contributors")]
+[assembly: AssemblyCopyright("Copyright (c) 2020-2024 SanteSuite Contributors")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
