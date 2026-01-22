@@ -211,13 +211,13 @@ namespace SanteDB.Queue.Msmq
         /// <summary>
         /// Get all queues
         /// </summary>
-        public IEnumerable<DispatcherQueueInfo> GetQueues() => MessageQueue.GetPrivateQueuesByMachine(".").Select(o =>
+        public IEnumerable<DispatcherQueueInfo> GetQueues() => MessageQueue.GetPrivateQueuesByMachine(this.m_configuration.QueuePath.Split('\\')[0]).Select(o =>
         {
             using (o)
             {
                 return new DispatcherQueueInfo()
                 {
-                    Id = $".\\{o.QueueName}",
+                    Id = $"{o.QueueName.Split('\\').Last()}",
                     Name = o.Label,
                     QueueSize = o.GetAllMessages().Count(),
                     CreationTime = o.CreateTime
