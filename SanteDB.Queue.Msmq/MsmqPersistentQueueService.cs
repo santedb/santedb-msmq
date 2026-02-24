@@ -272,7 +272,7 @@ namespace SanteDB.Queue.Msmq
 
             MessageQueue mq = null;
             var queueConnection = this.m_configuration?.QueuePath ?? ".\\Private$";
-            var queuePath = $"{queueConnection}\\sdb.{queueName}";
+            var queuePath = $"{queueConnection}\\{queueName}";
             // Do we need to create the queue?
             if (MessageQueue.Exists(queuePath))
             {
